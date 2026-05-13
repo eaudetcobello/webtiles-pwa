@@ -7,7 +7,7 @@ You pick which public Crawl server to play on (CAO, CDO, CDI, etc.) and the PWA 
 ## Run locally
 
 ```bash
-git clone git@github.com:eaudetcobello/webtiles-pwa.git crawl-pwa
+git clone https://github.com/eaudetcobello/webtiles-pwa.git crawl-pwa
 cd crawl-pwa
 npm run dev
 # open http://localhost:3000
