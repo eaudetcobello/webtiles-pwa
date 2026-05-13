@@ -1,0 +1,476 @@
+<!DOCTYPE HTML>
+<html>
+  <head>
+    <title>WebTiles - DCSS PWA</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <link rel="icon" href="/static/stone_soup_icon-32x32.png" type="image/png">
+    <link rel="manifest" href="/static/pwa/manifest.webmanifest">
+    <link rel="apple-touch-icon" href="/static/pwa/icons/apple-touch-icon.png">
+    <meta name="theme-color" content="#000000">
+    <link rel="stylesheet" type="text/css" href="/static/style.css">
+    <link rel="stylesheet" type="text/css" href="/static/fonts/fonts.css">
+    <link rel="stylesheet" type="text/css" href="/static/pwa/mobile-pwa.css">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <style>
+      /* Server chooser overlay */
+      #chooser {
+        position: fixed; inset: 0;
+        background: #000;
+        color: #d8d8d0;
+        font-family: "DejaVu Sans", system-ui, sans-serif;
+        z-index: 9999;
+        overflow-y: auto;
+        padding: 24px 16px 32px;
+        box-sizing: border-box;
+      }
+      #chooser .chooser-card {
+        max-width: 560px; margin: 0 auto;
+      }
+      #chooser h1 {
+        font-size: 22px; margin: 8px 0 4px; font-weight: 600;
+      }
+      #chooser .subtitle {
+        color: #8a8a82; font-size: 14px; margin: 0 0 20px;
+      }
+      #chooser ul {
+        list-style: none; padding: 0; margin: 0 0 20px;
+      }
+      #chooser li { margin: 0; }
+      #chooser button.server {
+        width: 100%;
+        display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+        background: #111; color: #d8d8d0;
+        border: 1px solid #2a2a26;
+        border-radius: 6px;
+        padding: 12px 14px;
+        margin: 6px 0;
+        font: inherit; font-size: 15px;
+        text-align: left; cursor: pointer;
+      }
+      #chooser button.server:hover:not(:disabled) {
+        background: #1a1a17; border-color: #4a4a42;
+      }
+      #chooser button.server:disabled {
+        opacity: 0.45; cursor: not-allowed;
+      }
+      #chooser .region { font-weight: 600; }
+      #chooser .host { color: #8a8a82; font-family: "DejaVu Sans Mono", monospace; font-size: 13px; }
+      #chooser .note {
+        display: block; color: #c08c40; font-size: 12px; margin-top: 4px;
+        font-family: "DejaVu Sans", sans-serif;
+      }
+      #chooser .custom {
+        border-top: 1px solid #2a2a26; padding-top: 16px; margin-top: 4px;
+      }
+      #chooser .custom label { display: block; margin-bottom: 6px; font-size: 13px; color: #8a8a82; }
+      #chooser .custom-row { display: flex; gap: 8px; }
+      #chooser input[type=text] {
+        flex: 1; background: #111; color: #d8d8d0;
+        border: 1px solid #2a2a26; border-radius: 4px;
+        padding: 10px; font: inherit; font-size: 14px;
+        font-family: "DejaVu Sans Mono", monospace;
+      }
+      #chooser .custom button {
+        background: #2a3a52; color: #d8e0f0; border: 1px solid #3a4a66;
+        border-radius: 4px; padding: 0 14px; font: inherit; font-size: 14px;
+        cursor: pointer;
+      }
+      #chooser footer {
+        color: #6a6a62; font-size: 12px; margin-top: 24px; text-align: center;
+        line-height: 1.5;
+      }
+      #chooser footer a { color: #8a8a82; }
+      .chooser-hidden { display: none !important; }
+    </style>
+  </head>
+  <body>
+    <noscript>Please enable javascript!</noscript>
+
+    <div id="chooser" class="chooser-hidden" role="dialog" aria-modal="true" aria-labelledby="chooser-title">
+      <div class="chooser-card">
+        <h1 id="chooser-title">Choose a Crawl server</h1>
+        <p class="subtitle">Each server has its own accounts, players, and characters. Pick one close to you for less lag.</p>
+        <ul id="server-list"></ul>
+        <div class="custom">
+          <label for="custom-url">Or paste a WebSocket URL:</label>
+          <div class="custom-row">
+            <input type="text" id="custom-url" placeholder="wss://example.com/socket" autocomplete="off" spellcheck="false">
+            <button id="custom-go" type="button">Connect</button>
+          </div>
+        </div>
+        <footer>
+          This is an unofficial mobile client. It connects to public Crawl servers operated by others; please be considerate of their resources.
+        </footer>
+      </div>
+    </div>
+
+    <script type="text/javascript">
+      (function () {
+        var SERVERS = [
+          { region: "Arizona, USA",          host: "crawl.akrasiac.org",     url: "wss://crawl.akrasiac.org:8443/socket" },
+          { region: "Ohio, USA",             host: "cbro.berotato.org",      url: "wss://cbro.berotato.org:8443/socket" },
+          { region: "New York, USA",         host: "crawl.dcss.io",          url: "wss://crawl.dcss.io/socket" },
+          { region: "Oregon, USA",           host: "crawl.roguelikes.gg",    url: "wss://crawl.roguelikes.gg/socket" },
+          { region: "São Paulo, Brazil",host: "crawl-br.roguelikes.gg", url: "wss://crawl-br.roguelikes.gg/socket" },
+          { region: "Paris, France",         host: "crawl.xtahua.com",       url: "wss://crawl.xtahua.com/socket" },
+          { region: "Gyeonggi, Korea",       host: "crawl.nemelex.cards",    url: "wss://crawl.nemelex.cards/socket" },
+          { region: "Sydney, Australia",     host: "crawl.project357.org",   url: "wss://crawl.project357.org/socket" }
+        ];
+
+        var params = new URLSearchParams(window.location.search);
+        var pageIsHttps = window.location.protocol === "https:";
+
+        // Reset path: ?picker=1 forces the chooser even if a server is saved.
+        if (params.get("picker") === "1") {
+          localStorage.removeItem("dev_socket_server");
+        }
+
+        var server = params.get("server") || localStorage.getItem("dev_socket_server") || "";
+
+        if (server) {
+          startWithServer(server);
+        } else {
+          showChooser();
+        }
+
+        function startWithServer(url) {
+          // Persist and propagate.
+          try { localStorage.setItem("dev_socket_server", url); } catch (e) {}
+          window.socket_server = url;
+          window.game_version = params.get("version") || "";
+
+          // Cookie tells the /gamedata/* proxy where to fetch from.
+          try {
+            var u = new URL(url);
+            var httpProto = u.protocol === "wss:" ? "https:" : "http:";
+            var origin = httpProto + "//" + u.host;
+            document.cookie = "crawl_origin=" + encodeURIComponent(origin)
+              + "; path=/; max-age=86400; SameSite=Lax";
+          } catch (e) { /* fall back to default at the proxy */ }
+
+          hideChooser();
+          loadClient();
+        }
+
+        function loadClient() {
+          // Inject the WebTiles client and the PWA shell only after we know
+          // which server to talk to. They open the WebSocket on load.
+          var require = document.createElement("script");
+          require.src = "/static/scripts/contrib/require.js";
+          require.setAttribute("data-main", "/static/scripts/app");
+          document.head.appendChild(require);
+
+          var pwa = document.createElement("script");
+          pwa.type = "module";
+          pwa.src = "/static/pwa/mobile-pwa.js";
+          document.head.appendChild(pwa);
+        }
+
+        function showChooser() {
+          var ul = document.getElementById("server-list");
+          for (var i = 0; i < SERVERS.length; i++) {
+            ul.appendChild(renderServerItem(SERVERS[i]));
+          }
+          document.getElementById("custom-go").addEventListener("click", onCustom);
+          document.getElementById("custom-url").addEventListener("keydown", function (e) {
+            if (e.key === "Enter") onCustom();
+          });
+          document.getElementById("chooser").classList.remove("chooser-hidden");
+        }
+
+        function hideChooser() {
+          var el = document.getElementById("chooser");
+          if (el) el.classList.add("chooser-hidden");
+        }
+
+        function renderServerItem(s) {
+          var li = document.createElement("li");
+          var btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "server";
+
+          var mixedContent = pageIsHttps && s.url && s.url.indexOf("ws://") === 0;
+          var unreachable = !s.url;
+          var disabled = mixedContent || unreachable;
+
+          var label = document.createElement("span");
+          var region = document.createElement("span");
+          region.className = "region";
+          region.textContent = s.region;
+          var host = document.createElement("span");
+          host.className = "host";
+          host.textContent = s.host;
+          label.appendChild(region);
+          btn.appendChild(label);
+          btn.appendChild(host);
+
+          var displayNote = s.note;
+          if (mixedContent && !displayNote) displayNote = "Unavailable";
+          if (displayNote) {
+            var note = document.createElement("span");
+            note.className = "note";
+            note.textContent = displayNote;
+            btn.appendChild(note);
+          }
+
+          if (disabled) {
+            btn.disabled = true;
+            btn.setAttribute("aria-disabled", "true");
+          } else {
+            btn.addEventListener("click", function () { startWithServer(s.url); });
+          }
+
+          li.appendChild(btn);
+          return li;
+        }
+
+        function onCustom() {
+          var input = document.getElementById("custom-url");
+          var raw = (input.value || "").trim();
+          if (!raw) return;
+          try {
+            var u = new URL(raw);
+            if (u.protocol !== "ws:" && u.protocol !== "wss:") throw new Error("not a ws/wss URL");
+            if (pageIsHttps && u.protocol === "ws:") {
+              alert("ws:// connections are blocked from this https:// page. Use wss:// or open this site over http://localhost during local dev.");
+              return;
+            }
+            startWithServer(u.toString());
+          } catch (e) {
+            alert("That doesn't look like a WebSocket URL. Try something like wss://crawl.example.com/socket");
+          }
+        }
+      })();
+    </script>
+
+    <div id="lobby" style="display: none;">
+      <div class="login_placeholder">
+        <div id="login">
+          <span id="login_message"></span>
+          <form action="#" id="login_form">
+            <label for="username">User:</label>
+            <input class="text" type="text" name="username" id="username">
+            <label for="password">Pass:</label>
+            <input class="text" type="password" name="password" id="password">
+            <input class="button" type="submit" name="submit" id="submit" value="Login">
+          </form>
+          <span class="extra_links">|
+          <a id="reg_link" href="javascript:">Register</a>
+          <a id="server_link" href="?picker=1">Change Server</a>
+          <a id="chem_link" href="javascript:" style="display: none;">Change Email</a>
+          <a id="chpw_link" href="javascript:" style="display: none;">Change Password</a>
+          <a id="logout_link" href="javascript:" style="display: none;">Logout</a></span>
+        </div>
+      </div>
+
+      <div id="register" class="floating_dialog" style="display: none;">
+        <span id="register_message"></span>
+        <form action="#" id="register_form">
+          <label for="username">Username:</label>
+          <input class="text" type="text" name="username" id="reg_username">
+          <br>
+          <label for="reg_password">Password:</label>
+          <input class="text" type="password" name="reg_password" id="reg_password">
+          <br>
+          <label for="reg_repeat_password">Repeat password:</label>
+          <input class="text" type="password" name="reg_repeat_password" id="reg_repeat_password">
+          <br>
+          <label for="reg_email">Email address:</label>
+          <input class="text" type="text" name="reg_email" id="reg_email">
+          <br>
+          <p>If you do not enter an email, you can't recover your password.</p>
+          <input class="button" type="button" name="cancel" id="reg_cancel" value="Cancel">
+          <input class="button" type="submit" name="submit" id="reg_submit" value="Submit">
+        </form>
+      </div>
+
+      <div id="change_password" class="floating_dialog" style="display: none;">
+        <span id="chpw_message"></span>
+        <form action="#" id="chpw_form">
+          <label for="change_cur_password">Current password:</label>
+          <input class="text" type="password" name="change_cur_password" id="change_cur_password">
+          <br>
+          <label for="change_password">New password:</label>
+          <input class="text" type="password" name="change_new_password" id="change_new_password">
+          <br>
+          <label for="change_repeat_password">Repeat password:</label>
+          <input class="text" type="password" name="change_repeat_password" id="change_repeat_password">
+          <br><br>
+          <input class="button" type="button" name="cancel" id="chpw_cancel" value="Cancel">
+          <input class="button" type="submit" name="submit" id="chpw_submit" value="Submit">
+        </form>
+      </div>
+
+      <div id="change_email" class="floating_dialog" style="display: none;">
+        <p>Your current email address is: <span id="chem_current"></span></p>
+        <span id="chem_message"></span>
+        <form action="#" id="chem_form">
+          <label for="chem_email">Email:</label>
+          <input class="text" type="text" name="chem_email" id="chem_email">
+          <br />
+          <p>If you do not enter an email, you can't recover your password.</p>
+          <input class="button" type="button" name="cancel" id="chem_cancel" value="Cancel">
+          <input class="button" type="submit" name="submit" id="chem_submit" value="Submit">
+        </form>
+      </div>
+
+      <div id="floating_ok_message" class="floating_dialog" style="display: none;">
+        <span id="ok_message_content"></span>
+        <input class="button" type="submit" name="submit" value="OK">
+      </div>
+
+      <div id="rc_edit" class="floating_dialog" style="display: none;">
+        <form action="#" id="rc_edit_form">
+          <textarea class="text" name="rc_file_contents" id="rc_file_contents" cols="80" rows="25">
+          </textarea>
+          <br>
+          <input class="button" type="submit" name="submit" id="rc_submit" value="Save" style="float: right;">
+        </form>
+      </div>
+
+      <div id="exit_game" class="floating_dialog" style="display: none;">
+          <p id="exit_game_reason"></p>
+          <pre id="exit_game_message"></pre>
+          <p id="exit_game_dump"></p>
+          <a class="hide_dialog" href="javascript:">Close</a>
+      </div>
+
+      <div id="banner">Welcome to WebTiles!</div>
+
+      <div id="account_restricted" style="display:none;">
+        This account is being held for administrator approval.
+      </div>
+      <div>
+        <div id="admin_panel_button" style="display:none;">
+          <span><a href="javascript:">Toggle admin panel</a></span>
+        </div>
+        <div id="admin_panel" style="display: none;">
+          <div><span><b>Admin panel</b></span></div>
+          <hr />
+          <div id="admin_announcements">
+            <span>Enter text to broadcast to all players.</span>
+            <form>
+              <label for="announcement_text">Announcement: </label>
+              <input class="text" type="text" name="announcement_text" id="announcement_text" />
+              <span><a href="javascript:" id="announcement_submit">send announcement</a></span>
+            </form>
+          </div>
+          <hr />
+          <div id="admin_panel_log"></div>
+        </div>
+      </div>
+
+      <div id="play_now"></div>
+
+      <br>
+
+      <div id="lobby_body">
+        <span>Games currently running:</span>
+        <table id="player_list" class="no_game_times">
+          <thead>
+            <tr>
+              <th class="username">User</th>
+              <th class="game_id">Game</th>
+              <th class="xl">XL</th>
+              <th class="char">Char</th>
+              <th class="place">Place</th>
+              <th class="turn">Turn</th>
+              <th class="dur">Time</th>
+              <th class="god">God</th>
+              <th class="idle_time">Idle</th>
+              <th class="spectator_count">Specs</th>
+              <th class="milestone_col">Milestone</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        <div style="display: none">
+          <table>
+            <tr id="game_entry_template">
+              <td class="username"></td>
+              <td class="game_id"></td>
+              <td class="xl"></td>
+              <td class="char"></td>
+              <td class="place"></td>
+              <td class="turn"></td>
+              <td class="dur"></td>
+              <td class="god"></td>
+              <td class="idle_time"></td>
+              <td class="spectator_count"></td>
+              <td class="milestone_col">
+                <div class="milestone_container">
+                  <div class="milestone">&nbsp;</div>
+                  <div class="new_milestone"></div>
+                </div>
+              </td>
+            </tr>
+          </table>
+        </div>
+      </div>
+
+      <div id="footer"></div>
+    </div>
+
+    <div id="game">
+      <div id="crt" style="display: none;"></div>
+    </div>
+
+    <div id="loader">
+      <div id="loader_center">
+        <span id="loader_text">Loading...</span><br>
+      </div>
+
+      <div id="stale_processes_message" class="floating_dialog" style="display: none;" tabindex="1000">
+        There are some stale <span class="game_name"></span> processes.
+        They'll be stopped in <span class="recover_timeout"></span> seconds.
+        Press a key now if you don't want this to happen!
+      </div>
+
+      <div id="force_terminate" class="floating_dialog" style="display: none;" tabindex="1001">
+        Couldn't stop one of your stale <span class="game_name"></span> processes
+        gracefully. Force its termination? [yn]
+        <br>
+        <input class="button" type="button" name="force_terminate_no" id="force_terminate_no" value="No" style="float: right;">
+        <input class="button" type="button" name="force_terminate_yes" id="force_terminate_yes" value="Yes" style="float: right;">
+      </div>
+    </div>
+
+    <div id="overlay"></div>
+
+    <div id="chat_hidden" style="display: none;"><span><a href="javascript:">+</a></span></div>
+
+    <div id="chat" style="display: none;">
+      <a href="javascript:" id="chat_hide_button">
+        <span id="chat_hide_button_span">(-)</span>
+      </a>
+      <a href="javascript:" id="chat_caption">
+        <span id="spectator_count">0 spectators</span>
+        <span id="message_count">0 new messages</span>
+      </a>
+
+      <div id="chat_body" style="display: none;">
+        <span id="spectator_list">&nbsp;</span>
+
+        <div id="chat_history_container">
+          <span id="chat_history"></span>
+        </div>
+
+        <input class="text" type="text" name="chat_input" id="chat_input" style="display: none">
+        <div id="chat_login_text">
+          <a id="chat_login_link" href="javascript:">Login</a> to chat
+        </div>
+      </div>
+    </div>
+
+    <div id="prompt" style="display: none;">
+      <div>
+          <div id="prompt_title"></div>
+          <div class="login_placeholder"></div>
+          <div id="prompt_footer"></div>
+       </div>
+    </div>
+  </body>
+</html>

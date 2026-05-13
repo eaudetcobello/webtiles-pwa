@@ -1,0 +1,2 @@
+# /gamedata/* is handled dynamically by functions/gamedata/[[path]].js
+# Add static rewrites below if needed.
